@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login - ShareVerse</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="auth-page">
+
+  <div class="auth-card">
+    <h1 class="auth-logo">Share<span>Verse</span></h1>
+    
+    <form id="login-form">
+      <div class="form-group">
+        <label for="emailOrUsername">Email or Username</label>
+        <input type="text" id="emailOrUsername" class="form-control" placeholder="Enter email or username" required>
+      </div>
+      
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" class="form-control" placeholder="Enter password" minlength="6" required>
+      </div>
+      
+      <button type="submit" class="btn" id="submit-btn">Log In</button>
+    </form>
+    
+    <p class="auth-switch">
+      Don't have an account? <a href="/register.html">Register</a>
+    </p>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/components.js"></script>
+  <script>
+    const loginForm = document.getElementById('login-form');
+    const submitBtn = document.getElementById('submit-btn');
+
+    loginForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const emailOrUsername = document.getElementById('emailOrUsername').value.trim();
+      const password = document.getElementById('password').value;
+
+      if (!emailOrUsername || !password) {
+        showToast('Please fill in all fields', 'danger');
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.innerText = 'Logging in...';
+
+      try {
+        const response = await api.auth.login(emailOrUsername, password);
+        if (response.success) {
+          localStorage.setItem('token', response.token);
+          localStorage.setItem('user', JSON.stringify(response.user));
+          showToast('Login successful! Redirecting...', 'success');
+          
+          setTimeout(() => {
+            window.location.href = '/index.html';
+          }, 1000);
+        }
+      } catch (error) {
+        showToast(error.message, 'danger');
+        submitBtn.disabled = false;
+        submitBtn.innerText = 'Log In';
+      }
+    });
+  </script>
+</body>
+</html>

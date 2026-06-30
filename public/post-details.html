@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Post Details - ShareVerse</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+  <div class="app-container">
+    <!-- Navbar injected here -->
+    <header id="navbar-placeholder" style="grid-area: header;"></header>
+    
+    <!-- Sidebar injected here -->
+    <aside id="sidebar-placeholder"></aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      
+      <!-- Page Loader -->
+      <div id="details-loader" class="spinner-wrapper">
+        <div class="spinner"></div>
+      </div>
+
+      <!-- Post Details Box -->
+      <div id="post-details-box" class="post-details-container" style="display: none;">
+        
+        <!-- Media Section (Left Column) -->
+        <div id="details-media-section" class="post-details-media-section">
+          <!-- img, video, or text card injected here -->
+        </div>
+        
+        <!-- Info & Comments Section (Right Column) -->
+        <div class="post-details-info-section">
+          
+          <!-- Post Author Header -->
+          <div class="post-header" style="border-bottom: 1px solid #efefef;">
+            <div class="post-author">
+              <a id="author-profile-link" href="#">
+                <img id="author-avatar" src="/uploads/profiles/default.png" class="post-author-avatar" alt="Avatar" onerror="this.src='/uploads/profiles/default.png'">
+              </a>
+              <div>
+                <a id="author-name" href="#" class="post-author-name">Full Name</a>
+                <span id="author-username" class="post-author-username">@username</span>
+              </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span id="post-time-text" class="post-time">1h ago</span>
+              <div id="post-delete-container"></div>
+            </div>
+          </div>
+
+          <!-- Comments Feed Timeline -->
+          <div id="comments-timeline" class="post-details-comments-list">
+            <!-- Caption item represented as first item, followed by real comments -->
+            <div class="post-comment-item" id="caption-item" style="border-bottom: 1px solid #f8f8f8; padding-bottom: 12px; margin-bottom: 5px;">
+              <img id="caption-avatar" src="/uploads/profiles/default.png" class="comment-avatar" alt="Avatar" onerror="this.src='/uploads/profiles/default.png'">
+              <div class="comment-text-wrapper">
+                <span id="caption-username" class="comment-username">username</span>
+                <span id="caption-text-body">caption text</span>
+              </div>
+            </div>
+            <div id="comments-list-box" style="display: flex; flex-direction: column; gap: 12px;"></div>
+          </div>
+
+          <!-- Likes, Actions, and Comment inputs -->
+          <div class="post-info-section" style="border-top: 1px solid #efefef; padding-top: 10px;">
+            <div class="post-actions" style="margin-bottom: 4px;">
+              <button id="post-like-trigger" class="post-action-btn">
+                <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+              </button>
+            </div>
+            
+            <div class="post-likes"><span id="likes-count-text">0</span> likes</div>
+          </div>
+
+          <!-- Comment input form -->
+          <div class="comment-section-box" style="border-top: 1px solid #efefef; padding: 10px 16px;">
+            <form id="comment-form" class="comment-input-form">
+              <input type="text" id="comment-input" class="comment-input" placeholder="Add a comment..." required>
+              <button type="submit" class="comment-submit-btn">Post</button>
+            </form>
+          </div>
+
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/components.js"></script>
+  <script>
+    const detailsLoader = document.getElementById('details-loader');
+    const detailsBox = document.getElementById('post-details-box');
+    const mediaSection = document.getElementById('details-media-section');
+    const authorProfileLink = document.getElementById('author-profile-link');
+    const authorAvatar = document.getElementById('author-avatar');
+    const authorName = document.getElementById('author-name');
+    const authorUsername = document.getElementById('author-username');
+    const postTimeText = document.getElementById('post-time-text');
+    const postDeleteContainer = document.getElementById('post-delete-container');
+
+    const captionAvatar = document.getElementById('caption-avatar');
+    const captionUsername = document.getElementById('caption-username');
+    const captionTextBody = document.getElementById('caption-text-body');
+    const commentsListBox = document.getElementById('comments-list-box');
+
+    const likeTrigger = document.getElementById('post-like-trigger');
+    const likesCountText = document.getElementById('likes-count-text');
+    const commentForm = document.getElementById('comment-form');
+    const commentInput = document.getElementById('comment-input');
+
+    let currentPost = {};
+    let currentUser = {};
+    try {
+      currentUser = JSON.parse(localStorage.getItem('user')) || {};
+    } catch(e) {
+      currentUser = {};
+    }
+
+    // Get post ID from URL parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const postId = urlParams.get('id');
+
+    if (!postId) {
+      window.location.href = '/index.html';
+    }
+
+    // Format Timestamp
+    function formatTime(dateStr) {
+      const date = new Date(dateStr);
+      const now = new Date();
+      const diffMs = now - date;
+      const diffSec = Math.floor(diffMs / 1000);
+      const diffMin = Math.floor(diffSec / 60);
+      const diffHr = Math.floor(diffMin / 60);
+      const diffDays = Math.floor(diffHr / 24);
+
+      if (diffSec < 60) return 'Just now';
+      if (diffMin < 60) return `${diffMin}m ago`;
+      if (diffHr < 24) return `${diffHr}h ago`;
+      if (diffDays < 7) return `${diffDays}d ago`;
+      
+      return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+
+    // Load Post Details and Comments
+    async function loadPostDetails() {
+      try {
+        detailsLoader.style.display = 'flex';
+        detailsBox.style.display = 'none';
+
+        const response = await api.posts.getSingle(postId);
+        if (response.success) {
+          currentPost = response.post;
+
+          // 1. Render Media Section
+          mediaSection.innerHTML = '';
+          if (currentPost.mediaType === 'image') {
+            mediaSection.className = 'post-details-media-section';
+            mediaSection.innerHTML = `<img src="${currentPost.mediaUrl}" class="post-media" alt="Post photo">`;
+          } else if (currentPost.mediaType === 'video') {
+            mediaSection.className = 'post-details-media-section';
+            mediaSection.innerHTML = `<video src="${currentPost.mediaUrl}" class="post-media" controls></video>`;
+          } else {
+            // Text only layout adjustments
+            mediaSection.className = 'post-details-media-section text-only';
+            mediaSection.innerHTML = `
+              <div class="post-caption-text">
+                <span style="font-size: 1.2rem; font-style: italic; color: var(--text-main); line-height: 1.6;">
+                  "${currentPost.caption || ''}"
+                </span>
+              </div>
+            `;
+          }
+
+          // 2. Set Author Header
+          const author = currentPost.user;
+          authorAvatar.src = author.profilePicture || '/uploads/profiles/default.png';
+          authorName.innerText = author.name;
+          authorUsername.innerText = `@${author.username}`;
+          authorProfileLink.href = `/profile.html?username=${author.username}`;
+          authorName.href = `/profile.html?username=${author.username}`;
+          postTimeText.innerText = formatTime(currentPost.createdAt);
+
+          // Render Delete post button if user owns it
+          const isPostOwner = author._id === currentUser._id;
+          postDeleteContainer.innerHTML = '';
+          if (isPostOwner) {
+            postDeleteContainer.innerHTML = `
+              <button id="delete-post-btn" class="post-action-btn" title="Delete Post">
+                <svg style="width:20px; height:20px; fill:var(--text-secondary);" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+              </button>
+            `;
+            document.getElementById('delete-post-btn').addEventListener('click', deletePostAction);
+          }
+
+          // 3. Set Caption items
+          captionAvatar.src = author.profilePicture || '/uploads/profiles/default.png';
+          captionUsername.innerText = author.username;
+          captionTextBody.innerText = currentPost.caption || '';
+          // Hide caption box on text-only posts since it's already shown on the left
+          document.getElementById('caption-item').style.display = currentPost.mediaType === 'text' ? 'none' : 'flex';
+
+          // 4. Update Likes actions
+          likesCountText.innerText = currentPost.likesCount || 0;
+          likeTrigger.classList.toggle('liked', currentPost.isLiked);
+          const pathNode = likeTrigger.querySelector('path');
+          if (currentPost.isLiked) {
+            pathNode.setAttribute('d', 'M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z');
+          } else {
+            pathNode.setAttribute('d', 'M16.5 3c-1.74 0-3.41.81-4.5 2.09C10.91 3.81 9.24 3 7.5 3 4.42 3 2 5.42 2 8.5c0 3.78 3.4 6.86 8.55 11.54L12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09z');
+          }
+
+          // 5. Fetch and Render Comments
+          await loadCommentsList();
+
+          detailsLoader.style.display = 'none';
+          detailsBox.style.display = 'grid';
+        }
+      } catch (error) {
+        showToast(error.message, 'danger');
+        detailsLoader.style.display = 'none';
+      }
+    }
+
+    // Load and render comments list
+    async function loadCommentsList() {
+      try {
+        commentsListBox.innerHTML = '';
+        const response = await api.comments.get(postId);
+        
+        if (response.success) {
+          const comments = response.comments || [];
+          if (comments.length === 0) {
+            commentsListBox.innerHTML = `<div style="text-align: center; color: var(--text-secondary); font-size: 0.8rem; padding: 20px 0;">No comments yet. Be the first to comment!</div>`;
+            return;
+          }
+
+          comments.forEach((comment) => {
+            const isCommentOwner = comment.user._id === currentUser._id;
+            const deleteBtn = isCommentOwner 
+              ? `<button class="comment-delete-btn" data-id="${comment._id}">Delete</button>` 
+              : '';
+
+            const row = document.createElement('div');
+            row.className = 'post-comment-item';
+            row.id = `comment-item-${comment._id}`;
+            row.innerHTML = `
+              <a href="/profile.html?username=${comment.user.username}">
+                <img src="${comment.user.profilePicture || '/uploads/profiles/default.png'}" class="comment-avatar" alt="Avatar" onerror="this.src='/uploads/profiles/default.png'">
+              </a>
+              <div class="comment-text-wrapper">
+                <a href="/profile.html?username=${comment.user.username}" class="comment-username" style="text-decoration:none; color:inherit;">${comment.user.username}</a>
+                <span>${comment.text}</span>
+                <div style="display:flex; gap: 15px; align-items: center;">
+                  <span style="font-size: 0.75rem; color: var(--text-secondary); margin-top:4px; display:block;">${formatTime(comment.createdAt)}</span>
+                  ${deleteBtn}
+                </div>
+              </div>
+            `;
+            
+            // Hook delete button inside comments list
+            const delBtnNode = row.querySelector('.comment-delete-btn');
+            if (delBtnNode) {
+              delBtnNode.addEventListener('click', deleteCommentAction);
+            }
+
+            commentsListBox.appendChild(row);
+          });
+        }
+      } catch (error) {
+        showToast(error.message, 'danger');
+      }
+    }
+
+    // Toggle Post Like
+    likeTrigger.addEventListener('click', async () => {
+      try {
+        const response = await api.posts.toggleLike(postId);
+        if (response.success) {
+          likeTrigger.classList.toggle('liked', response.isLiked);
+          const pathNode = likeTrigger.querySelector('path');
+          if (response.isLiked) {
+            pathNode.setAttribute('d', 'M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z');
+          } else {
+            pathNode.setAttribute('d', 'M16.5 3c-1.74 0-3.41.81-4.5 2.09C10.91 3.81 9.24 3 7.5 3 4.42 3 2 5.42 2 8.5c0 3.78 3.4 6.86 8.55 11.54L12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09z');
+          }
+          likesCountText.innerText = response.likesCount;
+        }
+      } catch (error) {
+        showToast(error.message, 'danger');
+      }
+    });
+
+    // Delete Post handler
+    async function deletePostAction() {
+      if (confirm('Are you sure you want to delete this post?')) {
+        try {
+          const response = await api.posts.delete(postId);
+          if (response.success) {
+            showToast('Post deleted successfully', 'success');
+            setTimeout(() => {
+              window.location.href = '/index.html';
+            }, 1000);
+          }
+        } catch (error) {
+          showToast(error.message, 'danger');
+        }
+      }
+    }
+
+    // Add Comment handler
+    commentForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const text = commentInput.value.trim();
+      if (!text) return;
+
+      try {
+        const response = await api.comments.add(postId, text);
+        if (response.success) {
+          showToast('Comment added!', 'success');
+          commentInput.value = '';
+          // Reload comments list
+          await loadCommentsList();
+        }
+      } catch (error) {
+        showToast(error.message, 'danger');
+      }
+    });
+
+    // Delete Comment handler
+    async function deleteCommentAction(e) {
+      const btn = e.target;
+      const commentId = btn.dataset.id;
+      if (confirm('Are you sure you want to delete this comment?')) {
+        try {
+          const response = await api.comments.delete(commentId);
+          if (response.success) {
+            showToast('Comment deleted', 'success');
+            document.getElementById(`comment-item-${commentId}`).remove();
+            
+            // If the box is empty now, show empty notice
+            if (commentsListBox.children.length === 0) {
+              commentsListBox.innerHTML = `<div style="text-align: center; color: var(--text-secondary); font-size: 0.8rem; padding: 20px 0;">No comments yet. Be the first to comment!</div>`;
+            }
+          }
+        } catch (error) {
+          showToast(error.message, 'danger');
+        }
+      }
+    }
+
+    // Run on startup
+    loadPostDetails();
+  </script>
+</body>
+</html>

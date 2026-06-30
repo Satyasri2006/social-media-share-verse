@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Edit Profile - ShareVerse</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .edit-profile-avatar-container {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      margin-bottom: 20px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border-color);
+    }
+    .edit-profile-avatar {
+      width: 70px;
+      height: 70px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 1px solid var(--border-color);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="app-container">
+    <!-- Navbar injected here -->
+    <header id="navbar-placeholder" style="grid-area: header;"></header>
+    
+    <!-- Sidebar injected here -->
+    <aside id="sidebar-placeholder"></aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      <div class="feed-container" style="max-width: 500px;">
+        
+        <div class="create-post-card">
+          <div class="create-post-header">Edit Profile</div>
+          
+          <!-- Loader -->
+          <div id="edit-loader" class="spinner-wrapper">
+            <div class="spinner"></div>
+          </div>
+
+          <form id="edit-profile-form" enctype="multipart/form-data" style="display: none;">
+            <div class="edit-profile-avatar-container">
+              <img id="edit-avatar-preview" class="edit-profile-avatar" src="/uploads/profiles/default.png" alt="Avatar Preview" onerror="this.src='/uploads/profiles/default.png'">
+              <div>
+                <label for="edit-profilePicture" class="file-input-label" style="display: inline-flex; width: auto; margin-bottom: 0;">
+                  Change Profile Photo
+                </label>
+                <input type="file" id="edit-profilePicture" accept="image/*" style="display: none;">
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="edit-name">Name</label>
+              <input type="text" id="edit-name" class="form-control" placeholder="Your full name" required>
+            </div>
+
+            <div class="form-group">
+              <label for="edit-username">Username</label>
+              <input type="text" id="edit-username" class="form-control" placeholder="Choose a username" required pattern="^[a-zA-Z0-9_]{3,15}$" title="Username must be 3-15 characters and contain only letters, numbers, or underscores">
+            </div>
+
+            <div class="form-group">
+              <label for="edit-bio">Bio</label>
+              <textarea id="edit-bio" class="form-control" placeholder="Tell us about yourself..." maxlength="160"></textarea>
+            </div>
+
+            <div style="display: flex; gap: 15px; margin-top: 20px;">
+              <button type="submit" id="save-btn" class="btn" style="flex: 2;">Save Changes</button>
+              <a href="#" id="cancel-link" class="btn btn-secondary" style="flex: 1; text-align: center; display: flex; align-items: center; justify-content: center;">Cancel</a>
+            </div>
+          </form>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/components.js"></script>
+  <script>
+    const editLoader = document.getElementById('edit-loader');
+    const editForm = document.getElementById('edit-profile-form');
+    const nameInput = document.getElementById('edit-name');
+    const usernameInput = document.getElementById('edit-username');
+    const bioInput = document.getElementById('edit-bio');
+    const avatarPreview = document.getElementById('edit-avatar-preview');
+    const fileInput = document.getElementById('edit-profilePicture');
+    const saveBtn = document.getElementById('save-btn');
+    const cancelLink = document.getElementById('cancel-link');
+
+    let currentUser = {};
+
+    // Get current user details and populate fields
+    async function loadUserData() {
+      try {
+        editLoader.style.display = 'flex';
+        editForm.style.display = 'none';
+
+        const response = await api.auth.getMe();
+        if (response.success) {
+          currentUser = response.user;
+          
+          nameInput.value = currentUser.name;
+          usernameInput.value = currentUser.username;
+          bioInput.value = currentUser.bio || '';
+          avatarPreview.src = currentUser.profilePicture || '/uploads/profiles/default.png';
+
+          // Set cancel link href
+          cancelLink.href = `/profile.html?username=${currentUser.username}`;
+
+          editLoader.style.display = 'none';
+          editForm.style.display = 'block';
+        }
+      } catch (error) {
+        showToast(error.message, 'danger');
+        editLoader.style.display = 'none';
+      }
+    }
+
+    // Handle File Attachment Preview
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        if (!file.type.startsWith('image/')) {
+          showToast('Please select a valid image file', 'danger');
+          fileInput.value = '';
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          avatarPreview.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+
+    // Form submit logic
+    editForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const name = nameInput.value.trim();
+      const username = usernameInput.value.trim();
+      const bio = bioInput.value.trim();
+      const profilePictureFile = fileInput.files[0];
+
+      if (!name || !username) {
+        showToast('Name and Username are required', 'danger');
+        return;
+      }
+
+      saveBtn.disabled = true;
+      saveBtn.innerText = 'Saving changes...';
+
+      const formData = new FormData();
+      formData.append('name', name);
+      formData.append('username', username);
+      formData.append('bio', bio);
+      
+      if (profilePictureFile) {
+        formData.append('profilePicture', profilePictureFile);
+      }
+
+      try {
+        const response = await api.users.updateProfile(formData);
+        if (response.success) {
+          // Update the localStorage copy of user info so layout components refresh correctly
+          localStorage.setItem('user', JSON.stringify(response.user));
+          showToast('Profile updated successfully!', 'success');
+          
+          setTimeout(() => {
+            window.location.href = `/profile.html?username=${response.user.username}`;
+          }, 1000);
+        }
+      } catch (error) {
+        showToast(error.message, 'danger');
+        saveBtn.disabled = false;
+        saveBtn.innerText = 'Save Changes';
+      }
+    });
+
+    // Run on startup
+    loadUserData();
+  </script>
+</body>
+</html>

@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Profile - ShareVerse</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+  <div class="app-container">
+    <!-- Navbar injected here -->
+    <header id="navbar-placeholder" style="grid-area: header;"></header>
+    
+    <!-- Sidebar injected here -->
+    <aside id="sidebar-placeholder"></aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      <div class="feed-container" style="max-width: 800px;">
+        
+        <!-- Profile Loader -->
+        <div id="profile-loader" class="spinner-wrapper">
+          <div class="spinner"></div>
+        </div>
+
+        <!-- Profile Details Section -->
+        <div id="profile-details" style="display: none;">
+          <div class="profile-header">
+            <div class="profile-avatar-container">
+              <img id="user-avatar" class="profile-avatar" src="/uploads/profiles/default.png" alt="Profile Picture" onerror="this.src='/uploads/profiles/default.png'">
+            </div>
+            
+            <div class="profile-info">
+              <div class="profile-user-row">
+                <h2 id="profile-username-heading" class="profile-username">username</h2>
+                <div id="profile-action-btn-container">
+                  <!-- Dynamic Button: Edit Profile OR Follow/Unfollow -->
+                </div>
+              </div>
+              
+              <div class="profile-stats">
+                <div class="profile-stat-item posts-stat">
+                  <span id="posts-count" class="profile-stat-count">0</span> posts
+                </div>
+                <div class="profile-stat-item" id="followers-trigger">
+                  <span id="followers-count" class="profile-stat-count">0</span> followers
+                </div>
+                <div class="profile-stat-item" id="following-trigger">
+                  <span id="following-count" class="profile-stat-count">0</span> following
+                </div>
+              </div>
+              
+              <div class="profile-bio-container">
+                <div id="profile-name-text" class="profile-name">Full Name</div>
+                <div id="profile-bio-text" class="profile-bio">Bio description goes here.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- User Posts Grid -->
+          <h3 style="margin-bottom: 15px; border-top: 1px solid var(--border-color); padding-top: 20px;">Posts</h3>
+          <div id="user-posts-grid" class="posts-grid"></div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- Modal Popup for Followers/Following lists -->
+  <div id="follow-modal" class="modal-overlay">
+    <div class="modal-content-card">
+      <div class="modal-header-section">
+        <h3 id="modal-title-text" class="modal-title">Users List</h3>
+        <button id="modal-close-trigger" class="modal-close-btn">&times;</button>
+      </div>
+      <div id="modal-users-list" class="modal-body-list">
+        <!-- User cards injected here -->
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/components.js"></script>
+  <script>
+    const profileLoader = document.getElementById('profile-loader');
+    const profileDetails = document.getElementById('profile-details');
+    const userAvatar = document.getElementById('user-avatar');
+    const usernameHeading = document.getElementById('profile-username-heading');
+    const actionBtnContainer = document.getElementById('profile-action-btn-container');
+    const postsCountEl = document.getElementById('posts-count');
+    const followersCountEl = document.getElementById('followers-count');
+    const followingCountEl = document.getElementById('following-count');
+    const nameEl = document.getElementById('profile-name-text');
+    const bioEl = document.getElementById('profile-bio-text');
+    const postsGrid = document.getElementById('user-posts-grid');
+
+    // Modal elements
+    const followModal = document.getElementById('follow-modal');
+    const modalTitleText = document.getElementById('modal-title-text');
+    const modalCloseTrigger = document.getElementById('modal-close-trigger');
+    const modalUsersList = document.getElementById('modal-users-list');
+
+    let profileUserId = '';
+    let currentLoggedUser = {};
+    try {
+      currentLoggedUser = JSON.parse(localStorage.getItem('user')) || {};
+    } catch(e) {
+      currentLoggedUser = {};
+    }
+
+    // Get username parameter from URL query string
+    const urlParams = new URLSearchParams(window.location.search);
+    const usernameParam = urlParams.get('username');
+
+    if (!usernameParam) {
+      // Default to logged-in user profile
+      if (currentLoggedUser.username) {
+        window.location.href = `/profile.html?username=${currentLoggedUser.username}`;
+      } else {
+        window.location.href = '/login.html';
+      }
+    }
+
+    // Fetch and populate profile details
+    async function loadProfile() {
+      try {
+        profileLoader.style.display = 'flex';
+        profileDetails.style.display = 'none';
+
+        const data = await api.users.getProfile(usernameParam);
+        
+        if (data.success) {
+          const profile = data.profile;
+          profileUserId = profile._id;
+
+          // Set Profile text content
+          userAvatar.src = profile.profilePicture || '/uploads/profiles/default.png';
+          usernameHeading.innerText = profile.username;
+          nameEl.innerText = profile.name;
+          bioEl.innerText = profile.bio || 'No bio yet.';
+          
+          postsCountEl.innerText = profile.postsCount;
+          followersCountEl.innerText = profile.followersCount;
+          followingCountEl.innerText = profile.followingCount;
+
+          // Determine button action: Edit Profile or Follow/Unfollow
+          const isSelf = profile.username.toLowerCase() === currentLoggedUser.username?.toLowerCase();
+          
+          if (isSelf) {
+            actionBtnContainer.innerHTML = `<a href="/edit-profile.html" class="btn profile-btn btn-secondary">Edit Profile</a>`;
+          } else {
+            const followClass = profile.isFollowing ? 'btn-secondary' : '';
+            const followText = profile.isFollowing ? 'Unfollow' : 'Follow';
+            actionBtnContainer.innerHTML = `<button id="follow-toggle-btn" class="btn profile-btn ${followClass}" data-id="${profile._id}">${followText}</button>`;
+            
+            // Hook follow toggle listener
+            document.getElementById('follow-toggle-btn').addEventListener('click', toggleFollowAction);
+          }
+
+          // Fetch posts grid
+          await loadUserPosts();
+
+          profileLoader.style.display = 'none';
+          profileDetails.style.display = 'block';
+        }
+      } catch (error) {
+        showToast(error.message, 'danger');
+        profileLoader.style.display = 'none';
+      }
+    }
+
+    // Toggle Follow/Unfollow handler
+    async function toggleFollowAction(e) {
+      const btn = e.target;
+      const targetId = btn.dataset.id;
+      btn.disabled = true;
+
+      try {
+        const response = await api.follow.toggleFollow(targetId);
+        if (response.success) {
+          btn.disabled = false;
+          if (response.isFollowing) {
+            btn.innerText = 'Unfollow';
+            btn.classList.add('btn-secondary');
+            showToast('Followed successfully', 'success');
+          } else {
+            btn.innerText = 'Follow';
+            btn.classList.remove('btn-secondary');
+            showToast('Unfollowed successfully', 'success');
+          }
+          // Reload profile numbers
+          const updatedData = await api.users.getProfile(usernameParam);
+          if (updatedData.success) {
+            followersCountEl.innerText = updatedData.profile.followersCount;
+            followingCountEl.innerText = updatedData.profile.followingCount;
+          }
+        }
+      } catch (error) {
+        showToast(error.message, 'danger');
+        btn.disabled = false;
+      }
+    }
+
+    // Load and render posts grid
+    async function loadUserPosts() {
+      try {
+        postsGrid.innerHTML = '';
+        const response = await api.posts.getUserPosts(usernameParam);
+        
+        if (response.success) {
+          if (response.posts.length === 0) {
+            postsGrid.innerHTML = `<div style="grid-column: 1 / span 3; text-align: center; padding: 40px; color: var(--text-secondary);">No posts shared yet.</div>`;
+            return;
+          }
+
+          response.posts.forEach((post) => {
+            let innerHtml = '';
+            
+            if (post.mediaType === 'image') {
+              innerHtml = `<img src="${post.mediaUrl}" alt="Post image">`;
+            } else if (post.mediaType === 'video') {
+              innerHtml = `<video src="${post.mediaUrl}" muted preload="metadata"></video>`;
+            } else {
+              // Text post preview
+              innerHtml = `<div class="grid-post-text-card">${post.caption || ''}</div>`;
+            }
+
+            const item = document.createElement('div');
+            item.className = 'grid-post-item';
+            item.innerHTML = `
+              ${innerHtml}
+              <div class="grid-post-item-overlay">
+                <div class="grid-post-stat">
+                  <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+                  <span>${post.likesCount || 0}</span>
+                </div>
+              </div>
+            `;
+            
+            // Go to post details on click
+            item.addEventListener('click', () => {
+              window.location.href = `/post-details.html?id=${post._id}`;
+            });
+
+            postsGrid.appendChild(item);
+          });
+        }
+      } catch (error) {
+        showToast(error.message, 'danger');
+      }
+    }
+
+    // Modal List Openers
+    document.getElementById('followers-trigger').addEventListener('click', () => openFollowModal('followers'));
+    document.getElementById('following-trigger').addEventListener('click', () => openFollowModal('following'));
+
+    async function openFollowModal(type) {
+      if (!profileUserId) return;
+      
+      modalUsersList.innerHTML = `<div class="spinner-wrapper"><div class="spinner"></div></div>`;
+      followModal.style.display = 'flex';
+      
+      try {
+        let users = [];
+        if (type === 'followers') {
+          modalTitleText.innerText = 'Followers';
+          const response = await api.follow.getFollowers(profileUserId);
+          users = response.followers || [];
+        } else {
+          modalTitleText.innerText = 'Following';
+          const response = await api.follow.getFollowing(profileUserId);
+          users = response.following || [];
+        }
+
+        modalUsersList.innerHTML = '';
+        if (users.length === 0) {
+          modalUsersList.innerHTML = `<div style="text-align: center; color: var(--text-secondary); padding: 20px 0;">No users found.</div>`;
+          return;
+        }
+
+        users.forEach((userObj) => {
+          const card = document.createElement('div');
+          card.className = 'user-card';
+          card.innerHTML = `
+            <div class="user-card-left">
+              <a href="/profile.html?username=${userObj.username}">
+                <img src="${userObj.profilePicture || '/uploads/profiles/default.png'}" class="user-card-avatar" alt="Avatar" onerror="this.src='/uploads/profiles/default.png'">
+              </a>
+              <div class="user-card-info">
+                <a href="/profile.html?username=${userObj.username}" class="user-card-name" style="text-decoration:none; color:inherit;">${userObj.name}</a>
+                <span class="user-card-username">@${userObj.username}</span>
+                <span class="user-card-bio">${userObj.bio || ''}</span>
+              </div>
+            </div>
+            <a href="/profile.html?username=${userObj.username}" class="btn user-card-btn btn-secondary">Visit</a>
+          `;
+          
+          // Make sure clicking links inside modal refreshes the active profile page
+          card.querySelectorAll('a').forEach(link => {
+            link.addEventListener('click', (e) => {
+              e.preventDefault();
+              followModal.style.display = 'none';
+              window.location.href = link.getAttribute('href');
+            });
+          });
+
+          modalUsersList.appendChild(card);
+        });
+
+      } catch (error) {
+        showToast(error.message, 'danger');
+        followModal.style.display = 'none';
+      }
+    }
+
+    // Modal Close handlers
+    modalCloseTrigger.addEventListener('click', () => {
+      followModal.style.display = 'none';
+    });
+
+    window.addEventListener('click', (e) => {
+      if (e.target === followModal) {
+        followModal.style.display = 'none';
+      }
+    });
+
+    // Run on startup
+    loadProfile();
+  </script>
+</body>
+</html>

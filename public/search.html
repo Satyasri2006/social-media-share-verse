@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Search Users - ShareVerse</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+  <div class="app-container">
+    <!-- Navbar injected here -->
+    <header id="navbar-placeholder" style="grid-area: header;"></header>
+    
+    <!-- Sidebar injected here -->
+    <aside id="sidebar-placeholder"></aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      <div class="feed-container" style="max-width: 600px;">
+        
+        <div class="create-post-card" style="margin-bottom: 20px;">
+          <div class="create-post-header">Search Users</div>
+          
+          <form id="search-form" style="display: flex; gap: 10px;">
+            <input type="text" id="search-input" class="form-control" placeholder="Search by name or username..." style="margin-bottom: 0;" required autocomplete="off">
+            <button type="submit" class="btn" style="width: auto; padding: 0 20px;">Search</button>
+          </form>
+        </div>
+
+        <!-- Search Loader -->
+        <div id="search-loader" class="spinner-wrapper" style="display: none;">
+          <div class="spinner"></div>
+        </div>
+
+        <!-- Search Results list -->
+        <div id="search-results" class="user-cards-grid">
+          <div style="text-align: center; color: var(--text-secondary); padding: 40px 0;">
+            Type a query above to search for users.
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/components.js"></script>
+  <script>
+    const searchForm = document.getElementById('search-form');
+    const searchInput = document.getElementById('search-input');
+    const searchResults = document.getElementById('search-results');
+    const searchLoader = document.getElementById('search-loader');
+
+    let debounceTimer;
+
+    // Trigger search function
+    async function performSearch(query) {
+      const trimmedQuery = query.trim();
+      if (!trimmedQuery) {
+        searchResults.innerHTML = `
+          <div style="text-align: center; color: var(--text-secondary); padding: 40px 0;">
+            Type a query above to search for users.
+          </div>
+        `;
+        return;
+      }
+
+      searchLoader.style.display = 'flex';
+
+      try {
+        const response = await api.users.search(trimmedQuery);
+        searchLoader.style.display = 'none';
+
+        if (response.success) {
+          searchResults.innerHTML = '';
+          const users = response.users || [];
+
+          if (users.length === 0) {
+            searchResults.innerHTML = `
+              <div style="text-align: center; color: var(--text-secondary); padding: 40px 0;">
+                No users found matching "${trimmedQuery}".
+              </div>
+            `;
+            return;
+          }
+
+          users.forEach((user) => {
+            const card = document.createElement('div');
+            card.className = 'user-card';
+            card.innerHTML = `
+              <div class="user-card-left">
+                <a href="/profile.html?username=${user.username}">
+                  <img src="${user.profilePicture || '/uploads/profiles/default.png'}" class="user-card-avatar" alt="Avatar" onerror="this.src='/uploads/profiles/default.png'">
+                </a>
+                <div class="user-card-info">
+                  <a href="/profile.html?username=${user.username}" class="user-card-name" style="text-decoration:none; color:inherit;">${user.name}</a>
+                  <span class="user-card-username">@${user.username}</span>
+                  <span class="user-card-bio">${user.bio || 'No bio.'}</span>
+                </div>
+              </div>
+              <a href="/profile.html?username=${user.username}" class="btn user-card-btn">Visit Profile</a>
+            `;
+            searchResults.appendChild(card);
+          });
+        }
+      } catch (error) {
+        showToast(error.message, 'danger');
+        searchLoader.style.display = 'none';
+      }
+    }
+
+    // Handle Form Submission
+    searchForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      clearTimeout(debounceTimer);
+      performSearch(searchInput.value);
+    });
+
+    // Real-time dynamic search as user types (debounced for efficiency)
+    searchInput.addEventListener('input', (e) => {
+      clearTimeout(debounceTimer);
+      const query = e.target.value;
+      debounceTimer = setTimeout(() => {
+        performSearch(query);
+      }, 350); // 350ms debounce time
+    });
+  </script>
+</body>
+</html>
