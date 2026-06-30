@@ -4,6 +4,12 @@ ShareVerse is a simplified, clean, and beginner-friendly mini social media platf
 
 ---
 
+# Live Webiste
+
+🔗https://share-verse.onrender.com/
+
+---
+
 ## Features
 
 - **User Authentication**: Secure user registration and login with password hashing (`bcryptjs`) and token authorization (`jsonwebtoken`). Includes working logout support.
